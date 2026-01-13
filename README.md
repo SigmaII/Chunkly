@@ -4,9 +4,12 @@ affidabile.
 Utilizza un protocollo L7 scritto in C per la condivisione dei file. Di seguito di riporta la struttura generale:
 
                                               
- | [4 byte ]  filename length (big endian)      |
- | [N byte ]  filename                          |
- | [8 byte]   file size (big endian)            |
- | [8 byte ]  payload size (big endian)         |
- | [M byte ]  payload                           |
+| Field                  | Size (bytes) | Description                |
+|------------------------|--------------|----------------------------|
+| filename length        | 4            | filename length (big endian) |
+| filename               | N            | filename                   |
+| file size              | 8            | file size (big endian)     |
+| payload size           | 8            | payload size (big endian)  |
+| payload                | M            | payload                    |
+
                                               
