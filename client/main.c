@@ -30,6 +30,8 @@ offset += 8;                                // avanza di 8 byte
  ---------------------------------------------|
  [N byte ]  filename                          |
  ---------------------------------------------|
+ [4 byte]   compressed                        |
+ ---------------------------------------------|
  [8 byte]   file size (big endian)            |
  ---------------------------------------------|
  [8 byte ]  payload size (big endian)         |
@@ -59,38 +61,17 @@ N.B: per il resume va gestito bene l'ultimo segmento (magari per il resume facci
 
 struct stat st = {0};
 
-int write_metadata(struct message *data,int i, char *prog, int segments){
-
-    FILE *fd;
-    char metadata_path[50];
-    char *user_path=(getenv("HOME"));
-    char *dirname=".segments";
-    char metafile[100];
-    
-    snprintf(metadata_path, sizeof(metadata_path), "%s/%s", user_path, dirname);
-    
-    if (stat(metadata_path, &st) == -1) {
-        if (mkdir(metadata_path, 0700) == -1) {
-            perror("mkdir");
-            return 1;
-        }
-    }
-
-    snprintf(metafile, sizeof(metafile), "%s/%s.mdata", metadata_path, prog);
-    fd = fopen (metafile, "w");
-    if (fd == NULL) {
-        ferror (fd);
-        return 1;
-    }
-
-    fprintf(fd, "%d", i);
-    fclose(fd);
-}
-
 int EndsWithSlash(const char *path)
 {
     if (!path || *path == '\0') return 0;
     return path[strlen(path) - 1] == '/';
+}
+
+int isDirectory(const char *path) {
+   struct stat statbuf;
+   if (stat(path, &statbuf) != 0)
+       return 0;
+   return S_ISDIR(statbuf.st_mode);
 }
 
 void debug_payloads(struct message m){
@@ -135,6 +116,11 @@ int protocol_builder(uint8_t **buffer, struct message *data){
     //metto il nome del file nel buffer
     memcpy(*buffer + data->offset, data->fileName, data->fileName_len);
     data->offset+=data->fileName_len;
+
+    //metto il valore di compressed nel buffer
+    uint32_t compressed = htonl(data->compressed);
+    memcpy(*buffer + data->offset, &compressed, 4);
+    data->offset += 4;
 
     //imposto la grandezza del file in formato big endian
     uint64_t file_size = htobe64(data->file_size);
@@ -182,6 +168,12 @@ int main (int argc, char *argv[])
     uint64_t uploaded_bytes;
     uint64_t total_bytes;
 
+    if (isDirectory(prog)){
+        data.compressed=1;
+    }else{
+        data.compressed=0;
+    }
+
     if (EndsWithSlash(path)){
         snprintf(data.fileName, sizeof(data.fileName), "%s%s", path, prog);
     }else{
@@ -193,7 +185,7 @@ int main (int argc, char *argv[])
     // inizializzo il socket
     sockfd=OpenSocket(addr);
 
-    buff_size=4+data.fileName_len+16;
+    buff_size=4+data.fileName_len+20;
     if((buffPath=malloc(buff_size)) == NULL){
         fprintf (stderr, "error: virtual memory exhausted.\n");
         return 1;
@@ -237,7 +229,7 @@ int main (int argc, char *argv[])
 
     last_segment=(total_bytes)-((data.payload_size) * (segments-1));
 
-    buff_size=4 + data.fileName_len + 8 + 8 + data.payload_size;
+    buff_size=4 + data.fileName_len + 4 + 8 + 8 + data.payload_size;
     printf("Buffer Size: %zd\n",buff_size);
 
     if((buffer=malloc(buff_size)) == NULL){
@@ -248,8 +240,6 @@ int main (int argc, char *argv[])
     bzero(buffer,buff_size);
 
     fseek (fd, data.uploaded_bytes, SEEK_SET);
-
-
     
     protocol_builder(&buffer, &data);
     
@@ -267,7 +257,7 @@ int main (int argc, char *argv[])
         //write_metadata(&data, i, prog, segments);
         file_splitter(fd, &data, i, segments, last_segment);
         if (i==segments-1){
-            buff_size=4 + data.fileName_len +8+ 8 + data.payload_size;
+            buff_size=4 + data.fileName_len + 4 + 8+ 8 + data.payload_size;
             printf("Last Buffer Size: %zd\n",buff_size);
             uint8_t *tmp= realloc(buffer,buff_size);
             if (!tmp) {
@@ -277,7 +267,7 @@ int main (int argc, char *argv[])
             buffer=tmp;
             
             chunk_size = htobe64(data.payload_size);
-            memcpy(buffer + 4 + data.fileName_len +8, &chunk_size, 8);
+            memcpy(buffer + 4 + data.fileName_len + 4 +8, &chunk_size, 8);
         }
         memcpy(buffer + data.offset, data.payload, data.payload_size);
         printf("%ld\n",data.payload_size);

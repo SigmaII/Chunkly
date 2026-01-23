@@ -8,6 +8,7 @@ struct message{
     char fileName[512];
     uint32_t fileName_len;
     uint64_t file_size;
+    uint32_t compressed;
     unsigned char *payload;
     uint64_t payload_size;
     uint64_t uploaded_bytes;
