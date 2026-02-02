@@ -55,9 +55,11 @@ N.B: per il resume va gestito bene l'ultimo segmento (magari per il resume facci
 #include <stdlib.h>
 #include <unistd.h>
 #include "socket_client.h"
+#include "compression.h"
 
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/syscall.h>
 
 struct stat st = {0};
 
@@ -169,6 +171,11 @@ int main (int argc, char *argv[])
     uint64_t total_bytes;
 
     if (isDirectory(prog)){
+        printf("progprima:%s\n",prog);
+        printf("addressprima:%s\n",addr);
+        compress_folder(file,prog);
+        printf("progdopo:%s\n",prog);
+        printf("addressdopo:%s\n",addr);
         data.compressed=1;
     }else{
         data.compressed=0;
