@@ -1,3 +1,4 @@
+#include "decompression.h"
 #include <stdio.h> 
 #include <netdb.h> 
 #include <netinet/in.h> 
@@ -15,6 +16,7 @@
 struct message{
     char *fileName;
     uint32_t fileName_len;
+    uint32_t compressed;
     uint64_t file_size;
     unsigned char *payload;
     uint64_t payload_size;
@@ -58,6 +60,7 @@ int ReceiveMessage(int connfd, struct message *data)
 { 
       
     uint32_t nlen_net;
+    uint32_t compressed;
     uint64_t file_size;
     uint64_t payload_size_net;
 
@@ -74,6 +77,14 @@ int ReceiveMessage(int connfd, struct message *data)
         return -1;
     data->fileName[data->fileName_len] = '\0';
     printf("Name of file: %s\n",data->fileName );
+
+
+    if (read_exact(connfd, &compressed, 4) < 0)
+        return -1;
+
+    data->compressed = ntohl(compressed);
+    printf("Value of compressed: %d \n", data->compressed);
+
 
     if (read_exact(connfd, &file_size, 8) < 0)
         return -1;
@@ -197,6 +208,10 @@ int main() {
                 file_merger(&data);
                 free(data.payload);
                 free(data.fileName);
+            }
+
+            if(data.compressed){
+                decompress_folder(data.fileName);
             }
 
             close(connfd);
