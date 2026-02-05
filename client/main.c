@@ -154,8 +154,12 @@ int main (int argc, char *argv[])
     uint8_t *buffPath;
     char *addr=argv[2];
     char *path=argv[3];
-    char *file= argv[1];
-    char *prog = basename (argv[1]); // trasforma il path passato (nel caso in cui sia un path) nel file finale
+    char *tfile= argv[1];
+    char file[512];
+    char prog[512];
+    //char *prog = basename (argv[1]); // trasforma il path passato (nel caso in cui sia un path) nel file finale
+    snprintf(prog, sizeof(prog), "%s", basename(tfile));
+    snprintf(file, sizeof(file), "%s", tfile);
 
     FILE *fd;
     long segments=0;
@@ -173,7 +177,10 @@ int main (int argc, char *argv[])
     if (isDirectory(prog)){
         printf("progprima:%s\n",prog);
         printf("addressprima:%s\n",addr);
-        compress_folder(file,prog);
+        printf("fileprima:%s\n",file);
+        compress_folder(file,prog,sizeof(prog));
+        snprintf(file, sizeof(file), "%s", prog);
+        printf("filedopo:%s\n",file);
         printf("progdopo:%s\n",prog);
         printf("addressdopo:%s\n",addr);
         data.compressed=1;
