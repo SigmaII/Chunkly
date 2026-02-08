@@ -1,29 +1,5 @@
 
 /*
-
-uint32_t name_len = strlen(filename); //mette la lunghezza del nome del file in name_len, che è di tipo int a 32 bit (4 byte) 
-uint32_t nlen = htonl(name_len);  // prende la lunghezza del nome del file (es. 1 byte) e la converte da int little endian (formato macchina) a int big endian (formato rete)
-
-memcpy(buffer + offset, &nlen, 4); //mette in una variabile buffer i 4 byte di nlen, che contengono la dimensione del nome del file a partire dalla posizione 0 (offset) 
-offset += 4;                       // avanza di 4 byte
-
-memcpy(buffer + offset, filename, name_len); //mette il nome effettivo del file nella variabile buffer
-offset += name_len;                          // avanza di n byte (n=name_len)
-
-uint64_t fsize = htobe64(size);             // crea una variabile di tipo int a 64 bit e converte la int size litte endian in int size big endian
-
-memcpy(buffer + offset, &fsize, 8);         // mette la dimensione del file nel buffer dedicandogli 8 byte (es. "3.5Gb" occuperà 2 byte)
-offset += 8;                                // avanza di 8 byte
-
-*/
-
-// I primi 4 byte del messaggio sono predisposti per la lunghezza del nome del file
-// altri <lunghezza_nome_file_in_byte> byte sono predisposti per il nome del file
-// altri 8 byte sono predisposti per la dimensione del payload
-//gli ultimi <dimensione_payload_in_byte> byte sono predisposti per il payload
-//NB: è necessario convertire in notazione big endian solo il primo e il terzo elemento tra quelli appena elencati
-
-/*
  Protocollo L7:
  ---------------------------------------------|
  [4 byte ]  filename length (big endian)      |
@@ -38,11 +14,6 @@ offset += 8;                                // avanza di 8 byte
  ---------------------------------------------|
  [M byte ]  payload                           |
  ---------------------------------------------|
-*/
-/* 
-L'Obiettivo è abilitare il protocollo al resume, passando il numero di segments uploaded (cosi il server impostera il file pointer a payload size * segments_uploaded)
-e la lunghezza del file per fare il controllo finale e restituire al client una risposta di completezza del trasferimento.
-N.B: per il resume va gestito bene l'ultimo segmento (magari per il resume facciamo ripartire il client a caricare sempre da segments_uploaded-1 cosi evitiamo il rischio) 
 */
 
 
@@ -63,6 +34,29 @@ N.B: per il resume va gestito bene l'ultimo segmento (magari per il resume facci
 
 struct stat st = {0};
 
+void print_banner() {                                                         
+    printf("\n");
+    printf(" ██████╗██╗  ██╗██╗   ██╗███╗   ██╗██╗  ██╗██╗  ██╗   ██╗\n");
+    printf("██╔════╝██║  ██║██║   ██║████╗  ██║██║ ██╔╝██║  ╚██╗ ██╔╝\n");
+    printf("██║     ███████║██║   ██║██╔██╗ ██║█████╔╝ ██║   ╚████╔╝ \n");
+    printf("██║     ██╔══██║██║   ██║██║╚██╗██║██╔═██╗ ██║    ╚██╔╝ \n");
+    printf("╚██████╗██║  ██║╚██████╔╝██║ ╚████║██║  ██╗███████╗██║\n");
+    printf(" ╚═════╝╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝╚═╝  ╚═╝╚══════╝╚═╝\n");
+    printf("\n");
+}
+
+//helper function
+void help(){
+
+    print_banner();
+    printf("Chunkly is a tool for transfering files with resume functions");
+    printf("Examples:");
+
+}
+
+
+
+//function for check if filename passed by command end with slash or not. This is necessary for the fusion of data.filename and basename of client path
 int EndsWithSlash(const char *path)
 {
     if (!path || *path == '\0') return 0;
@@ -76,64 +70,83 @@ int isDirectory(const char *path) {
    return S_ISDIR(statbuf.st_mode);
 }
 
+//debug function for check the data processed by splitter
 void debug_payloads(struct message m){
     printf("Contenuto del file:\n");
     for (int j = 0; j < m.payload_size; j++) {
             unsigned char c = m.payload[j];
-            if (c >= 32 && c <= 126) // caratteri stampabili ASCII
+            if (c >= 32 && c <= 126)
                 printf("%c", c);
             else
-                printf(".");         // per byte non stampabili
+                printf(".");
     }
     printf("\n");
 }
 
+/*
+#####################
+# SPLITTER FUNCTION #
+#####################
+
+1. Read the uploaded_bytes received by server
+2. Move file pointer to (uploaded_bytes) bytes
+3. Build the protocol
+4. Move file pointer to (payload_size)*i bytes
+5. Read bytes of file from pointer to payload_size
+(out of fuction)
+6. save bytes to buffer
+7. Send buffer to server
+
+*/
 int file_splitter(FILE *fd, struct message *data, int i, long segments, int last_segment){
 
     if (i<segments-1){
-        
         fseek (fd, data->payload_size*i, SEEK_SET);
         fread (data->payload,1, data->payload_size, fd);
     }else if (i==segments-1)
     {
-        
         fseek (fd, 0, SEEK_END);
         rewind (fd);
         fseek (fd, data->payload_size*i, SEEK_SET);
         fread (data->payload,1,last_segment, fd);
         data->payload_size = last_segment;
- 
     }
     return 1;
 }
 
 int protocol_builder(uint8_t **buffer, struct message *data){
 
-    //imposto la grandezza del nome del file in formato big endian
+    //file name size in big endian format
     uint32_t nlen = htonl(data->fileName_len);
-    //metto la grandezza del nome del file nel buffer ( primi 4 byte )
+    //put file name size in the first 4 bytes of buffer
     memcpy(*buffer + data->offset, &nlen, 4);
+    //increse offset of offset(0)+4
     data->offset += 4;
 
-    //metto il nome del file nel buffer
+    //put the file name in the (filename size) bytes of buffer
     memcpy(*buffer + data->offset, data->fileName, data->fileName_len);
+    //increase offset of (filename size): offset=4+(filename size)
     data->offset+=data->fileName_len;
 
-    //metto il valore di compressed nel buffer
+    //compressed in big endian format
     uint32_t compressed = htonl(data->compressed);
+    //put comrepssed value in the 4 bytes of buffer
     memcpy(*buffer + data->offset, &compressed, 4);
+    //increase offset of 4: offset = 4+(filename size)+4
     data->offset += 4;
 
-    //imposto la grandezza del file in formato big endian
+    //file size in big endian
     uint64_t file_size = htobe64(data->file_size);
-    //metto la grandezza del file nel buffer ( 8 byte )
+    //put file size value in the 8 bytes of buffer
     memcpy(*buffer + data->offset, &file_size, 8);
+    //increase offset of 8: offset = 4+(filename size)+4+8
     data->offset+=8;
 
-    //imposto la grandezza del segmento in big endian
+    //chunk size in big endian
     uint64_t chunk_size = htobe64(data->payload_size);
-    //metto la grandezza del segmento nel buffer (b byte)
+    //put the chunk size in the (chunk size) bytes of buffer
     memcpy(*buffer + data->offset, &chunk_size, 8);
+    //increase offset of (chunk size): offset = 4+(filename size)+4+8+(chunk size)
     data->offset+=8;
     return 1;
 
@@ -150,14 +163,13 @@ int main (int argc, char *argv[])
     int i;
     uint64_t chunk_size;
     size_t buff_size;
-    uint8_t *buffer; // gli uint corrispondono agli unsigned, ad esempio uint8 = unsigned da 8 bit = unsigned char
+    uint8_t *buffer;
     uint8_t *buffPath;
     char *addr=argv[2];
     char *path=argv[3];
     char *tfile= argv[1];
     char file[512];
     char prog[512];
-    //char *prog = basename (argv[1]); // trasforma il path passato (nel caso in cui sia un path) nel file finale
     snprintf(prog, sizeof(prog), "%s", basename(tfile));
     snprintf(file, sizeof(file), "%s", tfile);
 
@@ -166,7 +178,6 @@ int main (int argc, char *argv[])
     int last_segment;
 
     struct message data;
-    //struct message m;
     data.payload=NULL;
     data.offset=0;
     data.file_size=0;
@@ -174,15 +185,11 @@ int main (int argc, char *argv[])
     uint64_t uploaded_bytes;
     uint64_t total_bytes;
 
+    int sockfd;
+    sockfd=OpenSocket(addr);
     if (isDirectory(prog)){
-        printf("progprima:%s\n",prog);
-        printf("addressprima:%s\n",addr);
-        printf("fileprima:%s\n",file);
         compress_folder(file,prog,sizeof(prog));
         snprintf(file, sizeof(file), "%s", prog);
-        printf("filedopo:%s\n",file);
-        printf("progdopo:%s\n",prog);
-        printf("addressdopo:%s\n",addr);
         data.compressed=1;
     }else{
         data.compressed=0;
@@ -195,9 +202,7 @@ int main (int argc, char *argv[])
     }
     data.fileName_len=strlen(data.fileName);
 
-    int sockfd;
-    // inizializzo il socket
-    sockfd=OpenSocket(addr);
+    
 
     buff_size=4+data.fileName_len+20;
     if((buffPath=malloc(buff_size)) == NULL){
@@ -206,7 +211,8 @@ int main (int argc, char *argv[])
     }
     bzero(buffPath,buff_size);
     protocol_builder(&buffPath, &data);
-    //Invio un primo messaggio, senza payload, per controllare che il server abbia il file
+
+    //first message to check if the server has the file
 
     SendMessage(sockfd, buffPath, buff_size);
 
@@ -226,13 +232,14 @@ int main (int argc, char *argv[])
 
     data.file_size=ftell(fd);
     total_bytes=data.file_size-data.uploaded_bytes;
-    //calcolo i segments affinché non superino i 2gb di ram massima
+    
+    //calculate the size of segments so that it isn't more than 2Gb of Ram
 
     if (total_bytes>10000000000){
 
-        segments= (long)((total_bytes/((total_bytes/2000000000)+1))); //se il file supera i 10 gb calcolo i segments affinché non superino i 2gb
+        segments= (long)((total_bytes/((total_bytes/2000000000)+1))); //if file is more than 10Gb
     }else{
-        segments=5; // altrimenti divido sempre per 5 segmenti
+        segments=5; // otherwise divide by 5 (default)
     }
 
     data.payload_size = total_bytes / segments;
@@ -261,14 +268,9 @@ int main (int argc, char *argv[])
     printf("Name of file: %s\n", data.fileName);
     printf("Chunk size: %ld byte\n", data.payload_size);
 
-
-
-    //ad ogni ciclo cambio il payload mantenendo gli stessi metadati (per <segments> volte)
-
-
+    //same metadata but differents payloads in every iteration
     for(i=0; i<segments; i++){
 
-        //write_metadata(&data, i, prog, segments);
         file_splitter(fd, &data, i, segments, last_segment);
         if (i==segments-1){
             buff_size=4 + data.fileName_len + 4 + 8+ 8 + data.payload_size;
@@ -291,6 +293,13 @@ int main (int argc, char *argv[])
     }                
     CloseSocket(sockfd);
 
+    if (data.compressed==1){
+        if (remove(file) == 0) {
+            printf("Compressed file deleted successfully.\n");
+        } else {
+            printf("Error: Unable to delete the compressed file.\n");
+    }
+    }
 
     fclose (fd);
     free (buffer);

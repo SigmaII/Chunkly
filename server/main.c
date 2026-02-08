@@ -143,6 +143,7 @@ void SendMessage(int sockfd, void *buffer, size_t length)
 
 int main() {
 
+    char *finalFileName = NULL;
     int server_socket = socket(AF_INET, SOCK_STREAM, 0); 
     if (server_socket == -1) { 
         printf("socket creation failed...\n"); 
@@ -205,13 +206,17 @@ int main() {
 
             while (ReceiveMessage(connfd, &data) == 0) {
                 
+                if (!finalFileName) {
+                    finalFileName = strdup(data.fileName);
+                }
                 file_merger(&data);
                 free(data.payload);
                 free(data.fileName);
             }
 
-            if(data.compressed){
-                decompress_folder(data.fileName);
+            if(data.compressed && finalFileName){
+                decompress_folder(finalFileName);
+                free(finalFileName);
             }
 
             close(connfd);

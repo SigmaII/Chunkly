@@ -6,19 +6,35 @@
 #include <sys/stat.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <libgen.h>
 
-void compress_folder(char *file,char *prog,size_t bufsize) {
-    char buffer[512];
-    char cprog[512];
-    // lo script funziona solo passando la cartella senza "/" finale mentre ci si trova nella ., bisogna modificare dirname con qualcosa di piu sofisticato
-    snprintf(buffer, sizeof(buffer), "tar -zcf %s.tar.gz -C \"$(dirname %s)\" %s", prog, file, prog);
-    if(system("tar --version > /dev/null 2>&1") == 0){
-        if(system(buffer)==0){
-            printf("[INFO] Directory has been compressed\n");
-            snprintf(cprog, sizeof(cprog), "%s.tar.gz", prog);
-            snprintf(prog, bufsize, "%s", cprog);
-        }
-    }else{
-        printf("[ERROR] tar is not installed\n");
+void compress_folder(char *file, char *prog, size_t size) {
+
+    char cmd[1024];
+    char path_copy1[512];
+    char path_copy2[512];
+
+    // Copie perché dirname e basename modificano la stringa
+    snprintf(path_copy1, sizeof(path_copy1), "%s", file);
+    snprintf(path_copy2, sizeof(path_copy2), "%s", file);
+
+    char *dir  = dirname(path_copy1);
+    char *base = basename(path_copy2);
+
+    snprintf(cmd, sizeof(cmd),
+             "tar -zcf \"%s.tar.gz\" -C \"%s\" \"%s\"",
+             base, dir, base);
+
+    printf("CMD: %s\n", cmd);
+
+    int ret = system(cmd);
+    if (ret != 0) {
+        printf("[ERROR] tar failed\n");
+        return;
     }
+
+    printf("[INFO] Directory compressed successfully\n");
+
+    // aggiorno prog col nome nuovo
+    snprintf(prog, size, "%s.tar.gz", base);
 }

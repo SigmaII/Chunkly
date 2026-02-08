@@ -6,15 +6,31 @@
 #include <sys/stat.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <libgen.h>
 
 void decompress_folder(char *file) {
-    char buffer[512];
-    snprintf(buffer, sizeof(buffer),"tar xf %s -C \"$(dirname %s)\"",file, file);
-    if(system("tar --version > /dev/null 2>&1") == 0){
-        if(system(buffer)==0){
-            printf("[INFO] Directory has been decompressed\n");
-        }
+
+    char cmd[1024];
+    char path_copy[512];
+
+    snprintf(path_copy, sizeof(path_copy), "%s", file);
+
+    char *dir = dirname(path_copy);
+
+    snprintf(cmd, sizeof(cmd),
+             "tar xf \"%s\" -C \"%s\"",
+             file, dir);
+
+    printf("CMD: %s\n", cmd);
+
+    int ret = system(cmd);
+    if (ret != 0) {
+        printf("[ERROR] tar extraction failed\n");
     }else{
-        printf("[ERROR] tar is not installed\n");
+        if (remove(file) == 0) {
+            printf("Compressed file deleted successfully.\n");
+        } else {
+            printf("Error: Unable to delete the compressed file.\n");
+        }
     }
 }
