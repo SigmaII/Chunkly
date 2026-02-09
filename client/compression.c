@@ -14,7 +14,7 @@ void compress_folder(char *file, char *prog, size_t size) {
     char path_copy1[512];
     char path_copy2[512];
 
-    // Copie perché dirname e basename modificano la stringa
+    // Copy of data because dirname and basename change the original string
     snprintf(path_copy1, sizeof(path_copy1), "%s", file);
     snprintf(path_copy2, sizeof(path_copy2), "%s", file);
 
@@ -35,6 +35,6 @@ void compress_folder(char *file, char *prog, size_t size) {
 
     printf("[INFO] Directory compressed successfully\n");
 
-    // aggiorno prog col nome nuovo
+    //new name for prog
     snprintf(prog, size, "%s.tar.gz", base);
 }

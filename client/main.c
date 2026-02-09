@@ -49,8 +49,9 @@ void print_banner() {
 void help(){
 
     print_banner();
-    printf("Chunkly is a tool for transfering files with resume functions");
-    printf("Examples:");
+    printf("Chunkly is a tool for transfering files with resume functions\n\n");
+    printf("Examples:\n\n");
+    printf("    ./chunkly <source_file> <server_address> <server_path>");
 
 }
 
@@ -156,7 +157,7 @@ int main (int argc, char *argv[])
 {
 
     if (argc < 4) {
-    fprintf(stderr, "Use: %s <filename> <address> <path>\n", argv[0]);
+    help();
     return 1;
     }
 
