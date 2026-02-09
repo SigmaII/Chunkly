@@ -27,6 +27,8 @@
 #include <unistd.h>
 #include "socket_client.h"
 #include "compression.h"
+#define _DEFAULT_SOURCE
+#include <endian.h>
 
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -51,7 +53,7 @@ void help(){
     print_banner();
     printf("Chunkly is a tool for transfering files with resume functions\n\n");
     printf("Examples:\n\n");
-    printf("    ./chunkly <source_file> <server_address> <server_path>");
+    printf("    ./chunkly <source_file> <server_address> <server_path>\n");
 
 }
 
@@ -74,7 +76,7 @@ int isDirectory(const char *path) {
 //debug function for check the data processed by splitter
 void debug_payloads(struct message m){
     printf("Contenuto del file:\n");
-    for (int j = 0; j < m.payload_size; j++) {
+    for (uint64_t j = 0; j < m.payload_size; j++) {
             unsigned char c = m.payload[j];
             if (c >= 32 && c <= 126)
                 printf("%c", c);
@@ -210,7 +212,7 @@ int main (int argc, char *argv[])
         fprintf (stderr, "error: virtual memory exhausted.\n");
         return 1;
     }
-    bzero(buffPath,buff_size);
+    memset(buffPath,0,buff_size);
     protocol_builder(&buffPath, &data);
 
     //first message to check if the server has the file
@@ -259,7 +261,7 @@ int main (int argc, char *argv[])
         return 1;
     }
 
-    bzero(buffer,buff_size);
+    memset(buffer,0,buff_size);
 
     fseek (fd, data.uploaded_bytes, SEEK_SET);
     
@@ -275,7 +277,7 @@ int main (int argc, char *argv[])
         file_splitter(fd, &data, i, segments, last_segment);
         if (i==segments-1){
             buff_size=4 + data.fileName_len + 4 + 8+ 8 + data.payload_size;
-            printf("Last Buffer Size: %zd\n",buff_size);
+            
             uint8_t *tmp= realloc(buffer,buff_size);
             if (!tmp) {
             perror("realloc");
@@ -287,7 +289,7 @@ int main (int argc, char *argv[])
             memcpy(buffer + 4 + data.fileName_len + 4 +8, &chunk_size, 8);
         }
         memcpy(buffer + data.offset, data.payload, data.payload_size);
-        printf("%ld\n",data.payload_size);
+        
         //debug_payloads(m);
             
         SendMessage(sockfd, buffer, buff_size);

@@ -1,15 +1,22 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -std=c11 -I.
+CFLAGS = -Wall -Wextra -I.
 
 TARGET = chunkly
 SRC = main.c compression.c socket_client.c
-OBJ = $(SRC:.c=.o)
+OBJDIR = build
+OBJ = $(SRC:%.c=$(OBJDIR)/%.o)
+
 
 $(TARGET): $(OBJ)
 	$(CC) $(CFLAGS) -o $@ $^
 
-%.o: %.c
-	$(CC) $(CFLAGS) -c $<
+
+$(OBJDIR):
+	mkdir -p $(OBJDIR)
+
+
+$(OBJDIR)/%.o: %.c | $(OBJDIR)
+	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -f $(OBJ) $(TARGET)
+	rm -rf $(OBJDIR) $(TARGET)
