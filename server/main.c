@@ -7,8 +7,7 @@
 #include <stddef.h>
 #include <sys/socket.h> 
 #include <sys/types.h> 
-#include <unistd.h> // read(), write(), close()
-//#include "socket_server.h"
+#include <unistd.h>
 #define PORT 5000 
 #define SA struct sockaddr
  
@@ -38,7 +37,7 @@ int file_merger(struct message *data){
     
 }
 
-
+// this function is necessary because tcp send segments fo data instead of integer message
 ssize_t read_exact(int sockfd, void *buf, size_t len)
 {
     size_t total = 0;
@@ -47,7 +46,7 @@ ssize_t read_exact(int sockfd, void *buf, size_t len)
     while (total < len) {
         ssize_t n = read(sockfd, p + total, len - total);
         if (n <= 0)
-            return -1; // errore o connessione chiusa
+            return -1; //error
         total += n;
     }
     return total;
@@ -67,6 +66,7 @@ int ReceiveMessage(int connfd, struct message *data)
     if (read_exact(connfd, &nlen_net, 4) < 0)
         return -1;
 
+    //protocol re-builder
     data->fileName_len = ntohl(nlen_net);
     printf("Size of filename: %d byte\n", data->fileName_len);
 
@@ -104,6 +104,7 @@ int ReceiveMessage(int connfd, struct message *data)
     return 0;
 } 
 
+//this function return the size of existing file to client for changing file pointer position in client function and resume from the last byte received
 int UploadedBytes(struct message *data){
 
     FILE *fd;
@@ -123,6 +124,7 @@ int UploadedBytes(struct message *data){
 
 }
 
+//send message to client for verify that the upload was successful
 void SendMessage(int sockfd, void *buffer, size_t length)
 {
 
@@ -137,9 +139,6 @@ void SendMessage(int sockfd, void *buffer, size_t length)
     }
 
 }
-
-// l'idea di base è la seguente: il client invia un primo messaggio al server passandogli il filename (path). se il file esiste il server ritorna la sua dimensione
-// e il client sposta il file pointer sulla dimensione ritornata, altrimenti ritorna false e il client continua normalemente
 
 int main() {
 
@@ -188,7 +187,7 @@ int main() {
         pid_t pid = fork();
 
         if (pid == 0) {
-            //child
+            //child (for multiple connections)
             close(server_socket);
 
             struct message data;
