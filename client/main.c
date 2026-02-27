@@ -168,7 +168,7 @@ int main (int argc, char *argv[])
     size_t buff_size;
     uint8_t *buffer;
     uint8_t *buffPath;
-    char *addr=argv[2];
+    char *hostname=argv[2];
     char *path=argv[3];
     char *tfile= argv[1];
     char file[512];
@@ -189,7 +189,7 @@ int main (int argc, char *argv[])
     uint64_t total_bytes;
 
     int sockfd;
-    sockfd=OpenSocket(addr);
+    sockfd=OpenSocket(hostname);
     if (isDirectory(prog)){
         compress_folder(file,prog,sizeof(prog));
         snprintf(file, sizeof(file), "%s", prog);

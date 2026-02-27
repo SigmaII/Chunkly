@@ -11,10 +11,42 @@
 #define PORT 5000
 #define SA struct sockaddr
 
-int OpenSocket(char *addr)
+int dns_resolver(const char *hostname, char *addr, size_t addr_len){
+
+    struct addrinfo hints, *result, *rp;
+    int s;
+
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_INET;  // AF_INET or AF_INET6 to specify IPv4 or IPv6
+    hints.ai_socktype = SOCK_STREAM;
+
+    s = getaddrinfo(hostname, NULL, &hints, &result);
+    if (s != 0) {
+        fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(s));
+        return EXIT_FAILURE;
+    }
+
+    char ipstr[INET6_ADDRSTRLEN];
+    void *addr_ptr;
+    struct sockaddr_in *ipv4 = (struct sockaddr_in *)result->ai_addr;
+    addr_ptr = &(ipv4->sin_addr);
+    inet_ntop(AF_INET, &(ipv4->sin_addr), addr, addr_len);
+    //printf("IP Address: %s\n", ipstr);
+
+    freeaddrinfo(result);
+    return EXIT_SUCCESS;
+}
+
+int OpenSocket(char *hostname)
 {
+
     int sockfd;
+    char addr[INET6_ADDRSTRLEN];
     struct sockaddr_in servaddr;
+    if (dns_resolver(hostname, addr, sizeof(addr)) == -1){
+        printf("name resolution failed...\n");
+        exit(1);
+    }
     printf("address: %s\n", addr);
 
     // socket create and verification
