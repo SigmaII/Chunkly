@@ -104,13 +104,13 @@ void debug_payloads(struct message m){
 int file_splitter(FILE *fd, struct message *data, int i, long segments, int last_segment){
 
     if (i<segments-1){
-        fseek (fd, data->payload_size*i, SEEK_SET);
+        fseek(fd, data->uploaded_bytes + (data->payload_size * i), SEEK_SET);
         fread (data->payload,1, data->payload_size, fd);
     }else if (i==segments-1)
     {
         fseek (fd, 0, SEEK_END);
         rewind (fd);
-        fseek (fd, data->payload_size*i, SEEK_SET);
+        fseek(fd, data->uploaded_bytes + (data->payload_size * i), SEEK_SET);
         fread (data->payload,1,last_segment, fd);
         data->payload_size = last_segment;
     }

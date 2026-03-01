@@ -26,15 +26,23 @@ struct message{
 int file_merger(struct message *data){
 
     FILE *fd;
-    fd = fopen (data->fileName, "ab");
-    if (fd == NULL) {
-        ferror (fd);
+
+    // if file exist --> rb+ instead of wb
+    if (access(data->fileName, F_OK) == 0)
+        fd = fopen(data->fileName, "rb+");
+    else
+        fd = fopen(data->fileName, "wb");
+
+    if (fd == NULL)
         return -1;
-    }
-    fwrite (data->payload,1, data->payload_size, fd);
+
+    // end of file
+    fseek(fd, 0, SEEK_END);
+
+    fwrite(data->payload, 1, data->payload_size, fd);
+
     fclose(fd);
     return 0;
-    
 }
 
 // this function is necessary because tcp send segments fo data instead of integer message
