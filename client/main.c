@@ -173,8 +173,8 @@ int main (int argc, char *argv[])
     char *tfile= argv[1];
     char file[512];
     char prog[512];
-    snprintf(prog, sizeof(prog), "%s", basename(tfile));
-    snprintf(file, sizeof(file), "%s", tfile);
+    snprintf(prog, sizeof(prog), "%s", basename(tfile)); //path basename
+    snprintf(file, sizeof(file), "%s", tfile); //complete path
 
     FILE *fd;
     long segments=0;
@@ -190,7 +190,7 @@ int main (int argc, char *argv[])
 
     int sockfd;
     sockfd=OpenSocket(hostname);
-    if (isDirectory(prog)){
+    if (isDirectory(file)){
         compress_folder(file,prog,sizeof(prog));
         snprintf(file, sizeof(file), "%s", prog);
         data.compressed=1;
