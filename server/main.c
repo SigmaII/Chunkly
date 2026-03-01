@@ -124,6 +124,24 @@ int UploadedBytes(struct message *data){
 
 }
 
+uint64_t UploadedBytesForCompression(char *finalFileName){
+
+    FILE *fd;
+    uint64_t uploaded_bytes;
+    if (access(finalFileName, F_OK) == 0) {
+        fd = fopen (finalFileName, "rb");
+        if (fd == NULL) {
+            ferror (fd);
+            return -1;
+        }
+        fseek (fd, 0, SEEK_END);
+        uploaded_bytes=ftell(fd);
+    } else {
+        uploaded_bytes=0;
+    }
+    return uploaded_bytes;
+}
+
 //send message to client for verify that the upload was successful
 void SendMessage(int sockfd, void *buffer, size_t length)
 {
@@ -213,7 +231,7 @@ int main() {
                 free(data.fileName);
             }
 
-            if(data.compressed && finalFileName){
+            if(data.compressed && finalFileName && UploadedBytesForCompression(finalFileName)==data.file_size ){
                 decompress_folder(finalFileName);
                 free(finalFileName);
             }
