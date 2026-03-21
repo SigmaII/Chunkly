@@ -24,4 +24,10 @@ This ensures greater speed than reading and sending files recursively. Obviously
 # Get started
 Install Chunkly:
 
-``` ./start.sh ```
+    ./start.sh
+
+Get help:
+
+    chunkly -h
+
+
