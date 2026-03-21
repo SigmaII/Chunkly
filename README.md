@@ -19,4 +19,7 @@ Chunkly sends directories by compressing them in tar.gz (and changing the compre
 This ensures greater speed than reading and sending files recursively. Obviously, the larger the folder, the greater the advantage in terms of bytes.
 - `file_size` contains the total size of the file in big endian. This is more useful to the server, which, upon a first request from the client, will send it the current size of the requested file. This is the core of the resume function, which allows uploading from the last uploaded chunk.
 - `payload_size` contains the size of the chunk in big endian. Chunkly splits the file into chunks to speed up file delivery. Each chunk, after being sent, is removed from RAM. By default, any file smaller than 10GB is segmented into 5 chunks, to prevent the RAM used from exceeding 2GB.
-- `payload` contains the chunk's data.                            
+- `payload` contains the chunk's data.
+
+# Get started
+run start.sh for chunkly installation
