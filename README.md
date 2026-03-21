@@ -22,4 +22,6 @@ This ensures greater speed than reading and sending files recursively. Obviously
 - `payload` contains the chunk's data.
 
 # Get started
-run start.sh for chunkly installation
+Install Chunkly:
+
+``` ./start.sh ```
