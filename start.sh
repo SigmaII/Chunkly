@@ -1,0 +1,108 @@
+#!/bin/bash
+
+set -e
+set -o errtrace
+
+function errtrap {
+   echo $?
+   RED='\033[0;31m'
+   echo -e "\n\n\n${RED} ---- ERROR: unexpected termination! ----\n"
+   exit 1
+}
+
+trap errtrap ERR
+
+display_help() {
+echo "
+USAGE: start.sh 
+
+description     This script will install chunkly system 
+                
+flags
+                --only-server:   install chunkly-server
+                --only-client:   install chunkly client  
+                --upgrade        upgrade to latest version from github
+"
+}
+#shift $((OPTIND -1))
+
+function install_chunkly() {
+
+    mkdir -p /etc/chunkly-server/bin
+    mkdir .chunkly
+    git clone https://github.com/SigmaII/Chunkly.git .chunkly
+    cd .chunkly/server
+    make
+    mv chunkly-server /etc/chunkly-server/bin
+    cd ../client
+    make
+    mv chunkly /usr/local/bin
+
+    rm -r ../../.chunkly
+}
+
+function install_server() {
+
+    mkdir -p /etc/chunkly-server/bin
+    mkdir .chunkly
+    git clone https://github.com/SigmaII/Chunkly.git .chunkly
+    cd .chunkly/server
+    make
+    mv chunkly-server /etc/chunkly-server/bin
+
+    rm -r ../../.chunkly
+}
+
+function install_client() {
+
+    mkdir .chunkly
+    git clone https://github.com/SigmaII/Chunkly.git .chunkly
+    cd .chunkly/client
+    make
+    mv chunkly /usr/local/bin
+
+    rm -r ../../.chunkly
+}
+
+function install_upgrade() {
+
+    rm -r /etc/chunkly-server/bin/chunkly-server
+    rm -r /usr/local/bin/chunkly
+    mkdir .chunkly
+    git clone https://github.com/SigmaII/Chunkly.git .chunkly
+    cd .chunkly/server
+    make
+    mv chunkly-server /etc/chunkly-server/bin
+    cd ../client
+    make
+    mv chunkly /usr/local/bin
+
+    rm -r ../../.chunkly
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -h|--help)
+      display_help
+      exit 0
+      ;;
+    --only-server*)
+      install_server
+      shift
+      ;;
+    --only-client*)
+      install_client
+      shift
+      ;;
+    --upgrade*)
+      install_upgrade
+      shift
+      ;;
+    *)
+      install_chunkly
+      exit 0
+      ;;
+  esac
+done
+
+#install_chunkly
