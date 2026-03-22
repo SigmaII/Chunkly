@@ -21,7 +21,8 @@ description     This script will install chunkly system
 flags
                 --only-server:   install chunkly-server
                 --only-client:   install chunkly client  
-                --upgrade        upgrade to latest version from github
+                --upgrade        upgrade to latest version from github (client and server)
+                --uninstall      uninstall chunkly
 "
 }
 #shift $((OPTIND -1))
@@ -33,10 +34,14 @@ function install_chunkly() {
     git clone https://github.com/SigmaII/Chunkly.git .chunkly
     cd .chunkly/server
     make
-    mv chunkly-server /etc/chunkly-server/bin
+    cp chunkly-server /etc/chunkly-server/bin
     cd ../client
     make
-    mv chunkly /usr/local/bin
+    cp chunkly /usr/local/bin
+    cd ../systemd-service
+    cp chunkly-server.service  /etc/systemd/system/
+    systemctl daemon-reload
+    systemctl start chunkly-server
 
     rm -r ../../.chunkly
 }
@@ -48,7 +53,11 @@ function install_server() {
     git clone https://github.com/SigmaII/Chunkly.git .chunkly
     cd .chunkly/server
     make
-    mv chunkly-server /etc/chunkly-server/bin
+    cp chunkly-server /etc/chunkly-server/bin
+    cd ../systemd-service
+    cp chunkly-server.service  /etc/systemd/system/
+    systemctl daemon-reload
+    systemctl start chunkly-server
 
     rm -r ../../.chunkly
 }
@@ -59,26 +68,42 @@ function install_client() {
     git clone https://github.com/SigmaII/Chunkly.git .chunkly
     cd .chunkly/client
     make
-    mv chunkly /usr/local/bin
+    cp chunkly /usr/local/bin
 
     rm -r ../../.chunkly
 }
 
 function install_upgrade() {
 
-    rm -r /etc/chunkly-server/bin/chunkly-server
-    rm -r /usr/local/bin/chunkly
+    rm -f /etc/chunkly-server/bin/chunkly-server
+    rm -f /usr/local/bin/chunkly
     mkdir .chunkly
     git clone https://github.com/SigmaII/Chunkly.git .chunkly
     cd .chunkly/server
     make
-    mv chunkly-server /etc/chunkly-server/bin
+    cp chunkly-server /etc/chunkly-server/bin
     cd ../client
     make
-    mv chunkly /usr/local/bin
+    cp chunkly /usr/local/bin
+    cd ../systemd-service
+    cp chunkly-server.service  /etc/systemd/system/
+    systemctl daemon-reload
+    systemctl start chunkly-server
 
     rm -r ../../.chunkly
 }
+
+function uninstall_chunkly() {
+
+  rm -r /etc/chunkly-server || true
+  rm -f /usr/local/bin/chunkly || true
+  rm -f /etc/systemd/system/chunkly-server.service || true
+}
+
+if [ $# -eq 0 ]; then
+  install_chunkly
+  exit 0
+fi
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -86,21 +111,21 @@ while [ $# -gt 0 ]; do
       display_help
       exit 0
       ;;
-    --only-server*)
+    --only-server)
       install_server
       shift
       ;;
-    --only-client*)
+    --only-client)
       install_client
       shift
       ;;
-    --upgrade*)
+    --upgrade)
       install_upgrade
       shift
       ;;
-    *)
-      install_chunkly
-      exit 0
+    --uninstall)
+      uninstall_chunkly
+      shift
       ;;
   esac
 done
