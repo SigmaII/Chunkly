@@ -38,6 +38,10 @@ function install_chunkly() {
     cd ../client
     make
     cp chunkly /usr/local/bin
+    cd ../systemd-service
+    cp chunkly-server.service  /etc/systemd/system/
+    systemctl daemon-reload
+    systemctl start chunkly-server
 
     rm -r ../../.chunkly
 }
@@ -52,6 +56,7 @@ function install_server() {
     cp chunkly-server /etc/chunkly-server/bin
     cd ../systemd-service
     cp chunkly-server.service  /etc/systemd/system/
+    systemctl daemon-reload
     systemctl start chunkly-server
 
     rm -r ../../.chunkly
@@ -70,8 +75,8 @@ function install_client() {
 
 function install_upgrade() {
 
-    rm -r /etc/chunkly-server/bin/chunkly-server
-    rm -r /usr/local/bin/chunkly
+    rm -f /etc/chunkly-server/bin/chunkly-server
+    rm -f /usr/local/bin/chunkly
     mkdir .chunkly
     git clone https://github.com/SigmaII/Chunkly.git .chunkly
     cd .chunkly/server
@@ -80,16 +85,25 @@ function install_upgrade() {
     cd ../client
     make
     cp chunkly /usr/local/bin
+    cd ../systemd-service
+    cp chunkly-server.service  /etc/systemd/system/
+    systemctl daemon-reload
+    systemctl start chunkly-server
 
     rm -r ../../.chunkly
 }
 
 function uninstall_chunkly() {
 
-  rm -r /etc/chunkly-server
-  rm -r /usr/local/bin/chunkly
-  rm -r /etc/systemd/system/chunkly-server.service
+  rm -r /etc/chunkly-server || true
+  rm -f /usr/local/bin/chunkly || true
+  rm -f /etc/systemd/system/chunkly-server.service || true
 }
+
+if [ $# -eq 0 ]; then
+  install_chunkly
+  exit 0
+fi
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -97,25 +111,21 @@ while [ $# -gt 0 ]; do
       display_help
       exit 0
       ;;
-    --only-server*)
+    --only-server)
       install_server
       shift
       ;;
-    --only-client*)
+    --only-client)
       install_client
       shift
       ;;
-    --upgrade*)
+    --upgrade)
       install_upgrade
       shift
       ;;
-    --uninstall*)
+    --uninstall)
       uninstall_chunkly
       shift
-      ;;
-    *)
-      install_chunkly
-      exit 0
       ;;
   esac
 done
