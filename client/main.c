@@ -33,27 +33,23 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/syscall.h>
+#include <ctype.h>
 
 struct stat st = {0};
 
-void print_banner() {                                                         
-    printf("\n");
-    printf(" ██████╗██╗  ██╗██╗   ██╗███╗   ██╗██╗  ██╗██╗  ██╗   ██╗\n");
-    printf("██╔════╝██║  ██║██║   ██║████╗  ██║██║ ██╔╝██║  ╚██╗ ██╔╝\n");
-    printf("██║     ███████║██║   ██║██╔██╗ ██║█████╔╝ ██║   ╚████╔╝ \n");
-    printf("██║     ██╔══██║██║   ██║██║╚██╗██║██╔═██╗ ██║    ╚██╔╝ \n");
-    printf("╚██████╗██║  ██║╚██████╔╝██║ ╚████║██║  ██╗███████╗██║\n");
-    printf(" ╚═════╝╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝╚═╝  ╚═╝╚══════╝╚═╝\n");
-    printf("\n");
-}
 
 //helper function
 void help(){
 
-    print_banner();
     printf("Chunkly is a tool for transfering files with resume functions\n\n");
+    printf("Flags:\n\n");
+    printf("    -f  file to transfer\n");
+    printf("    -d  hostname or ip of destination server\n");
+    printf("    -p  destination path of server\n");
+    printf("    -s  number of segments (default is 5)\n\n");
+
     printf("Examples:\n\n");
-    printf("    ./chunkly <source_file> <server_address> <server_path>\n");
+    printf("    ./chunkly -f <source_file> -d <server_address> -p <server_path>\n");
 
 }
 
@@ -157,27 +153,17 @@ int protocol_builder(uint8_t **buffer, struct message *data){
 
 int main (int argc, char *argv[])
 {
-
-    if (argc < 4) {
-    help();
-    return 1;
-    }
-
+    
     int i;
     uint64_t chunk_size;
     size_t buff_size;
     uint8_t *buffer;
     uint8_t *buffPath;
-    char *hostname=argv[2];
-    char *path=argv[3];
-    char *tfile= argv[1];
     char file[512];
     char prog[512];
-    snprintf(prog, sizeof(prog), "%s", basename(tfile)); //path basename
-    snprintf(file, sizeof(file), "%s", tfile); //complete path
 
     FILE *fd;
-    long segments=0;
+    long segments=5; //default number of segments
     int last_segment;
 
     struct message data;
@@ -189,6 +175,60 @@ int main (int argc, char *argv[])
     uint64_t total_bytes;
 
     int sockfd;
+
+    /*
+    #####################
+    # FLAGS DEFINITIONS #
+    #####################
+    */
+   
+    char *hostname = NULL; //destionation server
+    char *path = NULL; // destionation path of server
+    char *tfile = NULL; // file
+    int index;
+    int c;
+
+    opterr = 0;
+    while ((c = getopt (argc, argv, "f:d:p:s:h")) != -1)
+        switch (c)
+        {
+        case 'f':
+            tfile = optarg;
+            break;
+        case 'd':
+            hostname = optarg;
+            break;
+        case 'p':
+            path = optarg;
+            break;
+        case 's':
+            segments = atoi(optarg);
+            break;
+        case 'h':
+            help();
+            return 1;
+            break;
+        case '?':
+            if (optopt == 'c')
+            fprintf (stderr, "Option -%c requires an argument.\n", optopt);
+            else if (isprint (optopt))
+            fprintf (stderr, "Unknown option `-%c'.\n", optopt);
+            else
+            fprintf (stderr,
+                    "Unknown option character `\\x%x'.\n",
+                    optopt);
+            return 1;
+        default:
+            abort ();
+        }
+
+    for (index = optind; index < argc; index++)
+        printf ("Non-option argument %s\n", argv[index]);
+
+
+    snprintf(prog, sizeof(prog), "%s", basename(tfile)); //path basename
+    snprintf(file, sizeof(file), "%s", tfile); //complete path
+
     sockfd=OpenSocket(hostname);
     if (isDirectory(file)){
         compress_folder(file,prog,sizeof(prog));
@@ -241,8 +281,6 @@ int main (int argc, char *argv[])
     if (total_bytes>10000000000){
 
         segments= (long)((total_bytes/((total_bytes/2000000000)+1))); //if file is more than 10Gb
-    }else{
-        segments=5; // otherwise divide by 5 (default)
     }
 
     data.payload_size = total_bytes / segments;
