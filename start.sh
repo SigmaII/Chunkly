@@ -21,7 +21,8 @@ description     This script will install chunkly system
 flags
                 --only-server:   install chunkly-server
                 --only-client:   install chunkly client  
-                --upgrade        upgrade to latest version from github
+                --upgrade        upgrade to latest version from github (client and server)
+                --uninstall      uninstall chunkly
 "
 }
 #shift $((OPTIND -1))
@@ -33,10 +34,10 @@ function install_chunkly() {
     git clone https://github.com/SigmaII/Chunkly.git .chunkly
     cd .chunkly/server
     make
-    mv chunkly-server /etc/chunkly-server/bin
+    cp chunkly-server /etc/chunkly-server/bin
     cd ../client
     make
-    mv chunkly /usr/local/bin
+    cp chunkly /usr/local/bin
 
     rm -r ../../.chunkly
 }
@@ -48,7 +49,10 @@ function install_server() {
     git clone https://github.com/SigmaII/Chunkly.git .chunkly
     cd .chunkly/server
     make
-    mv chunkly-server /etc/chunkly-server/bin
+    cp chunkly-server /etc/chunkly-server/bin
+    cd ../systemd-service
+    cp chunkly-server.service  /etc/systemd/system/
+    systemctl start chunkly-server
 
     rm -r ../../.chunkly
 }
@@ -59,7 +63,7 @@ function install_client() {
     git clone https://github.com/SigmaII/Chunkly.git .chunkly
     cd .chunkly/client
     make
-    mv chunkly /usr/local/bin
+    cp chunkly /usr/local/bin
 
     rm -r ../../.chunkly
 }
@@ -72,12 +76,19 @@ function install_upgrade() {
     git clone https://github.com/SigmaII/Chunkly.git .chunkly
     cd .chunkly/server
     make
-    mv chunkly-server /etc/chunkly-server/bin
+    cp chunkly-server /etc/chunkly-server/bin
     cd ../client
     make
-    mv chunkly /usr/local/bin
+    cp chunkly /usr/local/bin
 
     rm -r ../../.chunkly
+}
+
+function uninstall_chunkly() {
+
+  rm -r /etc/chunkly-server
+  rm -r /usr/local/bin/chunkly
+  rm -r /etc/systemd/system/chunkly-server.service
 }
 
 while [ $# -gt 0 ]; do
@@ -96,6 +107,10 @@ while [ $# -gt 0 ]; do
       ;;
     --upgrade*)
       install_upgrade
+      shift
+      ;;
+    --uninstall*)
+      uninstall_chunkly
       shift
       ;;
     *)
