@@ -93,6 +93,10 @@ uint64_t get_sv_filesize(int sockfd, DataNode *data){
 
 int buff_writer(FILE *fd,int n_segments,int segment_len,uint64_t start_bytes,c_buff *c_buff){
 
+    int *tail,*head;
+    unsigned char* payload=NULL;
+    uint64_t *payload_size=NULL;
+
     fd=fopen(fd,"rb");
     if(fd == NULL){
         ferror (fd);
@@ -101,8 +105,16 @@ int buff_writer(FILE *fd,int n_segments,int segment_len,uint64_t start_bytes,c_b
 
     fseek(fd,start_bytes,SEEK_SET); //init file pointer
     for(c_buff->tail=0; c_buff->tail<n_segments; c_buff->tail++){
-        if(c_buff->tail > )
-        fread(data->payload,1,)
+        tail=c_buff->tail;
+        head=c_buff->head;
+        payload=c_buff->buff[*tail].payload;
+        payload_size=c_buff->buff[*tail].payload_size;
+
+        fread(payload,segment_len,1,fd);
+        payload_size=sizeof(payload);
+        if(tail > head){
+            
+        }
 
     }
 
@@ -121,8 +133,14 @@ void buff_reader(){
 void circular_buffer(int segment_len,uint64_t filesize,uint64_t start_bytes){
 
     int n_segments;
-    n_segments=filesize/segment_len; //calculate number of total file segments
     c_buff *c_buff;
+
+    if(filesize>segment_len){
+        n_segments=(filesize/segment_len)+1; //calculate number of total file segments
+    }else{
+        printf("[INFO] File size is lower than segments lenght configured. Skipping segmentation...\n");
+        n_segments=1;
+    }
 
 }
 
