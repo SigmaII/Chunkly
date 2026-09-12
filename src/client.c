@@ -1,7 +1,12 @@
+#define _GNU_SOURCE
+#include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <stdint.h>
+#include <inttypes.h>
+#include <pthread.h>
+#include <ctype.h>
 
 #include "tcp_client.h"
 
@@ -36,26 +41,53 @@ che ci arrivi
 
 typedef enum {
     MSG_INFO_REQ = 0x01,  // File state request (1 byte)
-    MSG_INFO_RES = 0x02,  // Server response (1 byte)
+    //MSG_INFO_RES = 0x02,  // Server response (1 byte)
     MSG_CHUNK    = 0x03   // Send chunk of file (1 byte)
 } msg_type_t;
 
-typedef struct DataNode{
+typedef struct Header{
     uint8_t type; //message type
-    uint8_t id; //chunk ID
     uint32_t fileName_len; //length of filename in big endian
     char *fileName; //name of file in little endian
     uint64_t file_size; //size of file in big endian
+
+}file_header;
+
+typedef struct Node{
+    uint8_t id; //chunk ID
     uint64_t payload_size; //size of payload
     unsigned char *payload; //content of payload
-}DataNode;
+}file_node;
 
 typedef struct CircularBuffer{
-    DataNode buff[50];
     int head;
     int tail;
     int count; //used for ambiguity
+    int size; //size of circular buffer
+    file_node buff[50];
 }c_buff;
+
+//helper function
+void help(){
+
+    printf("Chunkly is a tool for transfering files with resume functions\n\n");
+    printf("Flags:\n\n");
+    printf("    -i  input file to transfer\n");
+    printf("    -d  hostname or ip of destination server\n");
+    printf("    -o  destination path of server\n");
+    printf("    -s  segments lenght (default is 1Mb)\n\n");
+
+    printf("Examples:\n\n");
+    printf("    ./chunkly -i <source_file> -d <server_address> -o <server_path>\n");
+
+}
+
+void print_c_buff(c_buff *buff){
+    for(int i=-1; i<buff->tail; i++){
+        printf("Node %d:\n",i);
+        printf("ID: %" PRIu8 "\n",buff->buff[i].id);
+    }
+}
 
 /**
      * Get size of file in bytes from local filesystem.
@@ -82,7 +114,7 @@ uint64_t get_lc_filesize(char *path){
      * @param data metadata of file
      * @return size of file
      */
-uint64_t get_sv_filesize(int sockfd, DataNode *data){
+uint64_t get_sv_filesize(int sockfd, file_header *data){
     uint64_t filesize;
     data->type=MSG_INFO_REQ;
     send_data(sockfd,data,sizeof(data));
@@ -91,13 +123,27 @@ uint64_t get_sv_filesize(int sockfd, DataNode *data){
 }
 
 
-int buff_writer(FILE *fd,int n_segments,int segment_len,uint64_t start_bytes,c_buff *c_buff){
+int buff_writer(char* client_path,int n_segments,int segment_len,uint64_t start_bytes,c_buff *c_buff){
 
-    int *tail,*head;
+    FILE *fd;
     unsigned char* payload=NULL;
+    uint8_t* chunk_id=NULL;
+    unsigned char* data=NULL;
     uint64_t *payload_size=NULL;
+    int c_size=sizeof(c_buff->buff); //size of circular buffer
+    c_buff->count=0;
+    
+    printf("[DEBUG] client_path: %s\n",client_path);
+    printf("[DEBUG] n_segments: %d\n",n_segments);
+    printf("[DEBUG] segment_len: %d bytes\n",segment_len);
 
-    fd=fopen(fd,"rb");
+    data=malloc(segment_len);
+    if (data == NULL){
+        perror("[ERROR] Writer failed to memory allocation");
+        return 0;
+    }
+
+    fd=fopen(client_path,"rb");
     if(fd == NULL){
         ferror (fd);
         return 0;
@@ -105,23 +151,60 @@ int buff_writer(FILE *fd,int n_segments,int segment_len,uint64_t start_bytes,c_b
 
     fseek(fd,start_bytes,SEEK_SET); //init file pointer
     for(c_buff->tail=0; c_buff->tail<n_segments; c_buff->tail++){
-        tail=c_buff->tail;
-        head=c_buff->head;
-        payload=c_buff->buff[*tail].payload;
-        payload_size=c_buff->buff[*tail].payload_size;
+        chunk_id=&c_buff->buff[c_buff->tail].id;
+        payload=c_buff->buff[c_buff->tail].payload;
+        payload_size=&c_buff->buff[c_buff->head].payload_size;
 
-        fread(payload,segment_len,1,fd);
-        payload_size=sizeof(payload);
-        if(tail > head){
-            
+        size_t bytes_read=fread(data,1,segment_len,fd); //read segment from file
+        *payload_size=bytes_read;
+        payload=malloc(bytes_read);
+        if(payload==NULL){
+            perror("[ERROR] Writer failed to memory allocation");
+            return 0;
+        }
+
+        /*check if the ring buffer is not full AND if the distance between reader and writer is not 0 OR if (tail - head) return 0 
+        --> count is set to zero only if reader has already read everything. In this case, writer can write to buffer*/
+        if(c_buff->count<c_size && (c_buff->tail-c_buff->head) !=0 || c_buff->count == 0){
+            //writer write to buffer
+            *chunk_id=c_buff->tail;
+            memcpy(payload,data,bytes_read);
+            printf("[DEBUG] tail: %d\n",c_buff->tail);
+            c_buff->count++;
+
+        }else{
+            //wait for the reader
+            while(c_buff->count != 0){
+                printf("[INFO] buffer is full, waiting reader..\n");
+                usleep(1000);
+            }
         }
 
     }
+    free(data);
+    fclose(fd);
 
 }
 
-void buff_reader(){
+int buff_reader(int sockfd,int n_segments,int segment_len,c_buff *c_buff){
 
+    for(c_buff->head=0; c_buff->head<n_segments; c_buff->head++){
+        /* check if the distance between reader and writer is not 0 OR if (tail - head) return 0 
+        --> count is > of zero only if reader has not read everything. In this case, the reade rcan read another data*/
+        if((c_buff->tail-c_buff->head) !=0 || c_buff->count > 0){
+            //reader send file to tcp server
+            send_data(sockfd,c_buff->buff,c_buff->buff->payload_size);
+            c_buff->count--;
+
+        }else{
+            //wait for the writer
+            printf("[INFO] buffer is empty, waiting writer..");
+            while(c_buff->count == 0){
+                usleep(1000);
+            }
+        }
+
+    }
 }
 
 /**
@@ -130,75 +213,25 @@ void buff_reader(){
      * @param filesize size of clt file
      * @param start_bytes size of srv file (so the start point of buff_writer)
      */
-void circular_buffer(int segment_len,uint64_t filesize,uint64_t start_bytes){
+int circular_buffer(char* client_path,int sockfd,int segment_len,uint64_t filesize,uint64_t start_bytes){
 
-    int n_segments;
-    c_buff *c_buff;
+    int n_segments=1;
+    c_buff c_buff;
+    FILE *fd;
+    pthread_t reader;
 
+    printf("[INFO] File size: %" PRIu64 " bytes\n",filesize);
     if(filesize>segment_len){
         n_segments=(filesize/segment_len)+1; //calculate number of total file segments
     }else{
         printf("[INFO] File size is lower than segments lenght configured. Skipping segmentation...\n");
-        n_segments=1;
     }
 
-}
-
-/**
-     * Split file into segments.
-     * @param fd file to split
-     * @param data 
-     * @param segments_num
-     * @return 
-     */
-int file_splitter(char *path, file_data *data,uint64_t filesize, int segments_num, int segments_len){
-
-
-    //NB: fread ritorna il numero di byte letti: se proviamo a leggere 1 MB anche se rimangono solo 0.5 Mb luio li legge senza andare in errore!!
-    int segments_read;
-    FILE* fd;
-
-    fd = fopen (path, "rb");
-    if (fd == NULL) {
-        ferror (fd);
-        return 0;
-    }
-
-    segments_read=filesize/segments_len*1000000; //get number of segments already read by server
-    for(int i=segments_read; i<segments_num-segments_read; i++){
-        fseek(fd,filesize,SEEK_SET);
-        fread(data->payload,1,)
-
-    }
-
-    if (i<segments-1){
-        fseek(fd, data->uploaded_bytes + (data->payload_size * i), SEEK_SET);
-        fread (data->payload,1, data->payload_size, fd);
-    }else if (i==segments-1)
-    {
-        fseek (fd, 0, SEEK_END);
-        rewind (fd);
-        fseek(fd, data->uploaded_bytes + (data->payload_size * i), SEEK_SET);
-        fread (data->payload,1,last_segment, fd);
-        data->payload_size = last_segment;
-    }
-    return 1;
-}
-
-
-//helper function
-void help(){
-
-    printf("Chunkly is a tool for transfering files with resume functions\n\n");
-    printf("Flags:\n\n");
-    printf("    -f  file to transfer\n");
-    printf("    -d  hostname or ip of destination server\n");
-    printf("    -p  destination path of server\n");
-    printf("    -s  number of segments (default is 5)\n\n");
-
-    printf("Examples:\n\n");
-    printf("    ./chunkly -f <source_file> -d <server_address> -p <server_path>\n");
-
+    buff_writer(client_path,n_segments,segment_len,start_bytes,&c_buff);
+    //print_c_buff(&c_buff);
+    //pthread_create(&reader,NULL,buff_reader,*args);
+    //pthread_join(reader, NULL);
+    return 0;
 }
 
 int main(int argc, char* argv[]){
@@ -206,23 +239,23 @@ int main(int argc, char* argv[]){
     //network vars
     int sockfd;
 
-    //vars for files management
-    DataNode file;
+    //file management vars
+    file_header header;
+    file_node file;
     char base_name[512];
-    int segments_len=1*1000000; //length of segments in bytes (default: 1Mb)
-    uint64_t srv_filesize; //filesize returned by server if file is already present
+    int segment_len=1*1000000; //length of segments in bytes (default: 1Mb)
+    uint64_t srv_filesize=0; //filesize returned by server if file is already present
 
 //flags definition
-    //vars for flags
+    //flag vars
     char *hostname = NULL; //destionation server
     char *server_path = NULL; // destionation path of server
     char *client_path = NULL; // file
-    int ram_limit = 4; //ram limit for segment partition (default: 4Gb)
     int index;
     int c;
 
     opterr = 0;
-    while ((c = getopt (argc, argv, "i:d:o:r:s:h")) != -1)
+    while ((c = getopt (argc, argv, "i:d:o:s:h")) != -1)
         switch (c)
         {
         case 'i': //input file
@@ -234,11 +267,8 @@ int main(int argc, char* argv[]){
         case 'o': //server output file
             server_path = optarg;
             break;
-        case 'r': //ram limit
-            ram_limit = atoi(optarg);
-            break;
         case 's': //segments len in byte
-            segments_len = atoi(optarg);
+            segment_len = atoi(optarg);
             break; 
         case 'h':
             help();
@@ -271,23 +301,23 @@ int main(int argc, char* argv[]){
         snprintf(server_path+len, 2, "/");
     }
 
-    //build protocol
-    file.fileName=base_name;
-    file.fileName_len=strlen(base_name);
-    file.file_size=get_lc_filesize(client_path);
-
-    //set buffer ring
-
-    //utilizzare un ring buffer circolare
-    if(segments_len > file.file_size){
-        segments_num=file.file_size / segments_len;
-        file_splitter(client_path,&file,get_sv_filesize(sockfd,&file));
-    }else{
-        printf("[INFO] File size is lower than segments lenght configured. Skipping segmentation...\n");
-    }
-
     //Open TCP socket
     sockfd=open_tcp_socket(hostname);
+
+    //get server file size (if present)
+    //srv_filesize=get_sv_filesize(sockfd,&header);
+
+    //build protocol for segmentation
+    header.type=MSG_CHUNK;
+    header.fileName=base_name;
+    header.fileName_len=strlen(base_name);
+    header.file_size=get_lc_filesize(client_path);
+
+    //printf("[DEBUG] filename: %s\n",header.fileName);
+    //printf("[DEBUG] filename length: %" PRIu32 "\n",header.fileName_len);
+
+    //circular buffer core
+    circular_buffer(client_path,sockfd,segment_len,header.file_size,srv_filesize);
 
     
     if(close(sockfd)<0){

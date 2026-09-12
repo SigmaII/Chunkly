@@ -70,7 +70,7 @@ int open_tcp_socket(char* data){
      * @param buff_len size of message
      * @return number of bytes sent
      */
-int send_data(int sockfd, char *buff, int buff_len){
+int send_data(int sockfd, const void* buff, size_t buff_len){
     int bytes_sent;
     bytes_sent = send(sockfd, buff, buff_len, 0);
     if (bytes_sent < 0){
